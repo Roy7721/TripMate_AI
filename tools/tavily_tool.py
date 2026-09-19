@@ -12,7 +12,7 @@ client = TavilyClient(
 def tavily_search(query):
     response = client.search(
         query= query, 
-        max_result = 5)
+        max_results = 5)
 
     results = []
     for i, r in enumerate(response['results'],1):
@@ -26,7 +26,7 @@ def tavily_search(query):
         results.append(f"{i}. **{title}**\n {url}\n {snippet}")
     return "\n\n".join(results)
 
-if __name__ == "_-main__":
+if __name__ == "__main__":
     result = tavily_search("capital of bangladesh")
 
     print(result)

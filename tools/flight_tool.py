@@ -171,7 +171,7 @@ def get_best_airport_for_country(country_code:str):
 
     candidates = []
 
-    for iata, airport in AIRPORTS.item():
+    for iata, airport in AIRPORTS.items():
         if not iata:
             continue
 
@@ -193,11 +193,11 @@ def get_best_airport_for_country(country_code:str):
 
             candidates.append((score, iata))
 
-        if not candidates:
-            return None
+    if not candidates:
+        return None
 
-        candidates.sort(reverse=True)
-        return candidates[0][1]
+    candidates.sort(reverse=True)
+    return candidates[0][1]
 
 def resolve_location_to_iata(location:str):
     """
@@ -262,6 +262,8 @@ def resolve_location_to_iata(location:str):
     if city_matches:
         city_matches.sort(reverse=True)
         return city_matches[0][1]
+
+    return None
 
 def find_location_mentions(query:str):
     """
