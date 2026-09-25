@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from mcp_backend import run_travel_agent
+from backend import run_travel_agent
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -109,7 +109,7 @@ async def favicon():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "mcp_app:app",
+        "app:app",
         host="127.0.0.1",
         port=8000,
         reload=True

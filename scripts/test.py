@@ -19,7 +19,13 @@
 # print("HI")
 # print(res['answer'])
 
+import sys
 import asyncio
+from pathlib import Path
+
+# mcp_client now lives in v2/, so make that folder importable from here
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "v2"))
+
 from mcp_client import get_all_tools
 
 if __name__ =="__main__":

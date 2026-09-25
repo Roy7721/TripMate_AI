@@ -1,0 +1,21 @@
+# Keep secrets, local environments and notes out of the Docker build context.
+# (The Dockerfiles only COPY pyproject.toml, uv.lock, README.md, .python-version and their v*/ folder.)
+
+# Secrets
+.env
+.env.*
+
+# Local environments and caches
+.venv
+**/__pycache__
+**/*.pyc
+
+# Git
+.git
+.gitignore
+
+# Private notes, scratch scripts, unfinished version
+JOURNEY.md
+notes.txt
+scripts/
+v3/
