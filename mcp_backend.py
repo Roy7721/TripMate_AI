@@ -1,7 +1,7 @@
 from typing import TypedDict, Annotated
+import json
 import operator
 import uuid
-import asyncio
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
@@ -16,7 +16,14 @@ from langchain_core.messages import (
 )
 from langchain_groq import ChatGroq
 
-from mcp_client_test import tavily_mcp_search,aviation_mcp_call,extract_destination, forecast_mcp_search, weather_mcp_search
+from mcp_client import (
+    run_async,
+    tavily_mcp_search,
+    aviation_mcp_call,
+    extract_destination,
+    forecast_mcp_search,
+    weather_mcp_search,
+)
 
 import os
 
@@ -51,8 +58,9 @@ if not GROQ_API_KEY:
 # =========================
 
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=GROQ_API_KEY
+    model="openai/gpt-oss-120b",
+    api_key=GROQ_API_KEY,
+    max_tokens=2000
 )
 
 # =========================
@@ -73,10 +81,31 @@ class TravelState(TypedDict):
 # Hotel Agent
 # =========================
 
+def compact_tavily(result, max_items: int = 5, max_chars: int = 350) -> str:
+    """Reduce a raw Tavily MCP response to title/url/snippet lines.
+
+    The raw response is several thousand tokens, which blows the
+    Groq free-tier TPM limit when fed into later prompts.
+    """
+    try:
+        text = result[0]["text"] if isinstance(result, list) else str(result)
+        items = json.loads(text).get("results", [])[:max_items]
+        lines = [
+            f"- {i.get('title', '')} ({i.get('url', '')}): "
+            f"{i.get('content', '')[:max_chars]}"
+            for i in items
+        ]
+        return "\n".join(lines) or str(result)[:2000]
+    except Exception:
+        return str(result)[:2000]
+
+
 def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
 
-    hotel_results = asyncio.run(tavily_mcp_search(query))
+    hotel_results = compact_tavily(
+        run_async(tavily_mcp_search(query))
+    )
 
     return {
         "hotel_results": hotel_results,
@@ -134,37 +163,37 @@ def flight_agent(state: TravelState):
 
     try:
 
-        airports = asyncio.run(
+        airports = run_async(
             aviation_mcp_call(
                 "list_airports"
             )
         )
 
-        airlines = asyncio.run(
+        airlines = run_async(
             aviation_mcp_call(
                 "list_airlines"
             )
         )
 
-        list_routes = asyncio.run(
+        list_routes = run_async(
                     aviation_mcp_call(
                         "list_routes"
                 )
         )
 
-        flight_arrival_departure_schedule = asyncio.run(
+        flight_arrival_departure_schedule = run_async(
                     aviation_mcp_call(
                         "flight_arrival_departure_schedule"
                     )
                 )
 
-        future_flights_arrival_departure_schedule = asyncio.run(
+        future_flights_arrival_departure_schedule = run_async(
                     aviation_mcp_call(
                         "future_flights_arrival_departure_schedule"
                     )
                 )
 
-        
+
 
         print("\nAIRPORTS:", airports)
         print("\nAIRLINES:", airlines)
@@ -214,11 +243,11 @@ def weather_agent(state: TravelState):
 
     city = extract_destination(state["user_query"])
 
-    weather_data = asyncio.run(
+    weather_data = run_async(
         weather_mcp_search(city)
     )
 
-    forecast_data = asyncio.run(
+    forecast_data = run_async(
         forecast_mcp_search(city)
     )
 
@@ -259,6 +288,7 @@ Weather Results:
 {state['weather_results']}
 
 Make the itinerary practical, budget-aware, and easy to follow.
+Keep it under 350 words: one or two short lines per day.
 """
 
     response = llm.invoke([
@@ -312,6 +342,7 @@ Important:
 - Mention that live flight API may not provide ticket prices if pricing is unavailable.
 - Include weather-based travel advice.
 - Keep the response useful for real travel planning.
+- Keep the whole answer under 600 words (Groq free tier has a small token limit).
 """
 
     response = llm.invoke([

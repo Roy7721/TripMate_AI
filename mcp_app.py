@@ -8,11 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend import run_travel_agent
-
-# This is to allow nested event loops for async calls in FastAPI
-import nest_asyncio
-nest_asyncio.apply()
+from mcp_backend import run_travel_agent
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -53,7 +49,7 @@ async def home(request: Request):
 
 
 @app.post("/api/travel")
-async def travel_planner(request_data: TravelRequest):
+def travel_planner(request_data: TravelRequest):
     try:
         user_message = request_data.message.strip()
 
@@ -113,7 +109,7 @@ async def favicon():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app:app",
+        "mcp_app:app",
         host="127.0.0.1",
         port=8000,
         reload=True

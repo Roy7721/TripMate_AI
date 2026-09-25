@@ -11,3 +11,6 @@ wheels/
 .env
 
 *.txt
+
+# Private development notes (not for the public repo)
+JOURNEY.md

@@ -1,7 +1,8 @@
 import os
 import sys
 from pathlib import Path
-
+import asyncio
+import threading
 import certifi
 from dotenv import load_dotenv
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -21,11 +22,42 @@ load_dotenv()
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 AVIATION_STACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    api_key=GROQ_API_KEY
+)
+
+
+# ==========================================
+# Sync -> async bridge
+# ==========================================
+# LangGraph nodes are sync, MCP tools are async. asyncio.run() per call
+# (patched by nest_asyncio) breaks anyio on Python 3.14, so every MCP
+# call runs on ONE long-lived background event loop instead.
+
+_mcp_loop = asyncio.new_event_loop()
+
+threading.Thread(
+    target=_mcp_loop.run_forever,
+    name="mcp-event-loop",
+    daemon=True
+).start()
+
+
+def run_async(coro, timeout: float = 120):
+    """Run a coroutine on the background MCP loop and wait for the result."""
+    return asyncio.run_coroutine_threadsafe(
+        coro,
+        _mcp_loop
+    ).result(timeout)
+
 
 # Automatically find the current project folder.
 # This replaces the hard-coded Windows paths.
 PROJECT_DIR = Path(__file__).resolve().parent
-WEATHER_SERVER_PATH = PROJECT_DIR / "custom_weather_mcp_server.py"
+WEATHER_SERVER_PATH = PROJECT_DIR / "custom_mcp_server.py"
 
 # Preserve the complete Windows environment when starting
 # local stdio MCP servers.
@@ -295,7 +327,7 @@ async def initialize_weather_tools():
             tools_by_name.keys()
         )
 
-    raise RuntimeError(
+        raise RuntimeError(
             "Missing Weather MCP tools: "
             f"{', '.join(missing_tools)}. "
             f"Available tools: "
