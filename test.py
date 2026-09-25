@@ -19,16 +19,16 @@
 # print("HI")
 # print(res['answer'])
 
-# import asyncio
-# from mcp_client_test import get_all_tools
-
-# if __name__ =="__main__":
-#     asyncio.run(get_all_tools())
-
 import asyncio
-from mcp_client_test import tavily_mcp_search
+from mcp_client import get_all_tools
 
 if __name__ =="__main__":
-    query = "who is the winner of fifa world cup 2022."
-    result = asyncio.run(tavily_mcp_search(query))
-    print(result)
+    asyncio.run(get_all_tools())
+
+# import asyncio
+# from mcp_client_test import tavily_mcp_search
+
+# if __name__ =="__main__":
+#     query = "who is the winner of fifa world cup 2022."
+#     result = asyncio.run(tavily_mcp_search(query))
+#     print(result)
