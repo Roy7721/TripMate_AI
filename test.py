@@ -10,11 +10,25 @@
 # print("\n" + "=" * 80 + "\n")
 # print(search_flights("all country flight info"))
 
-from backend import run_travel_agent
+# from backend import run_travel_agent
 
-user_input = input("Salam Boss. GIve me a try please.")
+# user_input = input("Salam Boss. GIve me a try please.")
 
 
-res = run_travel_agent(user_input = user_input, thread_id = 'testing')
-print("HI")
-print(res['answer'])
+# res = run_travel_agent(user_input = user_input, thread_id = 'testing')
+# print("HI")
+# print(res['answer'])
+
+# import asyncio
+# from mcp_client_test import get_all_tools
+
+# if __name__ =="__main__":
+#     asyncio.run(get_all_tools())
+
+import asyncio
+from mcp_client_test import tavily_mcp_search
+
+if __name__ =="__main__":
+    query = "who is the winner of fifa world cup 2022."
+    result = asyncio.run(tavily_mcp_search(query))
+    print(result)
