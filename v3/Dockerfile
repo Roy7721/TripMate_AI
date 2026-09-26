@@ -11,8 +11,8 @@
 #
 # Notes:
 #  - The AviationStack MCP server is started with `uvx aviationstack-mcp`, so uv/uvx
-#    must stay in the image and the container needs internet access. The first flight
-#    request downloads that package (slower once), later requests reuse the cache.
+#    must stay in the image. The package is pre-installed at build time, so the first
+#    flight request does not download anything and works even if PyPI is unreachable.
 #  - The weather MCP server (custom_mcp_server.py) is started with the venv's Python.
 #  - The human-approval step pauses the graph and saves its state in PostgreSQL (the
 #    LangGraph checkpointer), not in the container's memory.
@@ -29,26 +29,34 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PYTHON_DOWNLOADS=never \
     PATH="/app/.venv/bin:$PATH"
 
+# Create the user BEFORE anything is written into /app. uv then writes files that
+# already belong to `app`, so no `chown -R` is needed afterwards. The old chown
+# rewrote all 15,075 venv files into a second 377MB layer that carried no new
+# content - bytes pushed to Docker Hub and pulled by Azure on every cold start.
+RUN useradd --create-home --uid 1000 app \
+ && mkdir -p /app \
+ && chown app:app /app
+
 WORKDIR /app
+USER app
 
 # Dependencies first, so this layer is cached until pyproject.toml / uv.lock change.
 # --no-install-project: only third-party packages are needed, not the tripmate_ai stub.
-COPY pyproject.toml uv.lock README.md .python-version ./
-RUN uv sync --frozen --no-dev --no-install-project
+# --no-cache: uv otherwise leaves a 266MB download cache inside the image that nothing
+# reads at run time. Docker's own layer cache still skips this whole step while the
+# lock file is unchanged, so ordinary rebuilds are unaffected.
+COPY --chown=app:app pyproject.toml uv.lock README.md .python-version ./
+RUN uv sync --frozen --no-dev --no-install-project --no-cache
 
 # Application code (v3 is self-contained: app, backend, mcp_client, weather server, static, templates)
-COPY v3/ ./v3/
-
-# Do not run as root. The home directory is where uvx keeps its package cache.
-RUN useradd --create-home --uid 1000 app && chown -R app:app /app
-USER app
+COPY --chown=app:app v3/ ./v3/
 
 # Pre-install the AviationStack MCP server. Without this, the first flight request in a
 # fresh container spends 15-25s resolving and downloading 40 packages from PyPI before
 # any flight lookup starts - out of the 240s Azure Container Apps allows per request.
-# Installed as `app` so it lands in /home/app, where uvx looks. Verified: uvx then
-# starts it with --offline, so a PyPI outage cannot break a live request.
-RUN uv tool install aviationstack-mcp==1.8.1
+# Verified: uvx then starts it with --offline, so a PyPI outage cannot break a request.
+# --no-cache drops a further 51MB of download cache from /home/app/.cache.
+RUN uv tool install --no-cache aviationstack-mcp==1.8.1
 
 # The code uses script-style imports (from backend import ...), so run from inside v3/
 WORKDIR /app/v3
