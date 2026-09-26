@@ -43,6 +43,13 @@ COPY v3/ ./v3/
 RUN useradd --create-home --uid 1000 app && chown -R app:app /app
 USER app
 
+# Pre-install the AviationStack MCP server. Without this, the first flight request in a
+# fresh container spends 15-25s resolving and downloading 40 packages from PyPI before
+# any flight lookup starts - out of the 240s Azure Container Apps allows per request.
+# Installed as `app` so it lands in /home/app, where uvx looks. Verified: uvx then
+# starts it with --offline, so a PyPI outage cannot break a live request.
+RUN uv tool install aviationstack-mcp==1.8.1
+
 # The code uses script-style imports (from backend import ...), so run from inside v3/
 WORKDIR /app/v3
 

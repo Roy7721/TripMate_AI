@@ -93,7 +93,10 @@ def travel_planner(request_data: TravelRequest):
 
 
 @app.post("/api/travel/approve")
-async def approve_travel_plan(request_data: ApprovalRequest):
+# Deliberately not async: resume_travel_agent() blocks for ~20s on LLM calls, which
+# would stall the event loop and every other request, /health included. A plain def
+# lets FastAPI run it in a worker thread instead.
+def approve_travel_plan(request_data: ApprovalRequest):
     try:
         if not request_data.approved and not request_data.feedback.strip():
             return JSONResponse(

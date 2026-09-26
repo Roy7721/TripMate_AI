@@ -2,8 +2,8 @@ from typing import Any,TypedDict, Annotated
 import json
 import operator
 import uuid
-import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 from dotenv import load_dotenv
 import certifi
 from langgraph.graph import StateGraph, START, END
@@ -759,13 +759,30 @@ graph.add_edge("guardrail_blocked", END)
 # =========================
 DATABASE_URL = get_database_url()
 
-_conn = psycopg.connect(
-    DATABASE_URL,
-    autocommit=True,
-    row_factory=dict_row
+# A pool, not one connection. The human-approval step leaves the graph paused while
+# someone reads the draft, so there is a multi-minute gap with no database traffic -
+# long enough for a managed Postgres to close an idle connection. A single connection
+# opened at import would be dead by the time Approve is clicked, and nothing here
+# would reconnect, so every later request would fail too. check_connection tests a
+# connection before lending it out and replaces a dead one without the caller noticing.
+_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=0,      # hold nothing open while idle, so there is nothing to go stale
+    max_size=4,
+    max_idle=60,     # retire idle connections well inside any provider's own cutoff
+    kwargs={
+        "autocommit": True,
+        "row_factory": dict_row,
+        # Neon's pooler does handle prepared statements, but a stock PgBouncer in
+        # transaction mode does not. Disabled so DATABASE_URL can change provider
+        # without this breaking.
+        "prepare_threshold": None,
+    },
+    check=ConnectionPool.check_connection,
+    open=True,
 )
 
-checkpointer = PostgresSaver(_conn)
+checkpointer = PostgresSaver(_pool)
 checkpointer.setup()
 
 travel_graph = graph.compile(checkpointer=checkpointer)
