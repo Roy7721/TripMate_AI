@@ -14,8 +14,7 @@
 .git
 .gitignore
 
-# Private notes, scratch scripts, unfinished version
+# Private notes and scratch scripts
 JOURNEY.md
 notes.txt
 scripts/
-v3/
