@@ -4,7 +4,7 @@ $ErrorActionPreference = "Continue"
 $AppName = "tripmate-ai"; $Group = "ml-apps"
 $GAP = 90; $CEILING = 240
 
-$fqdn = az containerapp show -n $AppName -g $Group --query properties.configuration.ingress.fqdn -o tsv
+$fqdn = az containerapp show -n $AppName -g $Group --only-show-errors --query properties.configuration.ingress.fqdn -o tsv
 if (-not $fqdn) { Write-Host "could not find the app - has deploy.ps1 run?" -ForegroundColor Red; exit 1 }
 $base = "https://$fqdn"
 Write-Host "testing $base`n" -ForegroundColor Cyan

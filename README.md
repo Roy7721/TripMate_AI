@@ -13,6 +13,14 @@ Describe a trip in plain English. A supervisor agent screens the request, routes
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-checkpoints-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Dockerfiles-2496ED?logo=docker&logoColor=white)
 
+<br>
+
+[![Try v3 live](https://img.shields.io/badge/%E2%96%B6%20Try%20v3%20live-on%20Azure-0f7b52?style=for-the-badge)](https://tripmate-ai.ashysmoke-d4f578eb.koreacentral.azurecontainerapps.io)
+
+**No install and no API keys needed — just open it and describe a trip.**
+It scales to zero, so the first request after an idle spell waits about 6 seconds for the
+container to wake. A full plan then takes roughly a minute of real agent work.
+
 </div>
 
 ---
@@ -78,7 +86,7 @@ The project is developed in stages. Each version lives in its own self-contained
 |---|---|---|---|---|
 | **v1** | [`v1/`](v1/) | Hand-written Python tools (Tavily client, AviationStack REST client with a rule-based route parser) | Flight → Hotel → Itinerary → Final | ✅ Working |
 | **v2** | [`v2/`](v2/) | MCP servers: Tavily, AviationStack, custom Weather | Flight → Hotel → Weather → Itinerary → Final | ✅ Working |
-| **v3** | [`v3/`](v3/) | Same MCP servers as v2 | Guardrail + Supervisor → (Flight, Hotel, Weather, Budget: only those needed) → Itinerary → **Human approval** → Final | ✅ Working (first iteration) |
+| **v3** | [`v3/`](v3/) | Same MCP servers as v2 | Guardrail + Supervisor → (Flight, Hotel, Weather, Budget: only those needed) → Itinerary → **Human approval** → Final | ✅ **[Live](https://tripmate-ai.ashysmoke-d4f578eb.koreacentral.azurecontainerapps.io)** |
 | **v4** | *not created yet* | — | — | 🔜 Coming soon |
 
 ---
@@ -338,7 +346,7 @@ Open **http://127.0.0.1:8000** and try one of the quick prompts.
 
 In **v3** the result first appears as a **draft itinerary** with an approval panel. Click **Approve & Generate Final**, or type feedback and click **Revise Using Feedback**, to get the final plan.
 
-> ⏱️ A full plan takes a while. In one v3 test run the draft took about 1 minute 45 seconds and the final answer another 20 seconds. The agents run one after another, several LLM calls are involved, and each MCP tool call starts its own connection or subprocess.
+> ⏱️ A full plan takes a while. The agents run one after another, several LLM calls are involved, and each MCP tool call starts its own connection or subprocess. Measured on a request that used all five specialists: **66s** to the draft and **5s** after approval on the deployed version, or roughly **95s** and **8s** running locally.
 
 ### List the MCP tools (optional)
 
@@ -480,7 +488,16 @@ docker run --rm -p 8000:8000 --env-file .env tripmate-v3
 
 Use `v1/Dockerfile` / `tripmate-v1` or `v2/Dockerfile` / `tripmate-v2` for the other versions. The `.env` file is excluded from the image by `.dockerignore` and passed in at run time, so no secrets are baked into it.
 
-The v2 and v3 images keep `uvx` because the AviationStack MCP server is started with `uvx aviationstack-mcp`. The container therefore needs internet access, and the first flight lookup downloads that package.
+The v2 and v3 images keep `uvx` because the AviationStack MCP server is started with `uvx aviationstack-mcp`. In the v3 image that package is **pre-installed at build time**, so the first flight lookup downloads nothing and works even if PyPI is unreachable.
+
+### Deployment (v3)
+
+v3 runs on **Azure Container Apps** at [tripmate-ai.…azurecontainerapps.io](https://tripmate-ai.ashysmoke-d4f578eb.koreacentral.azurecontainerapps.io):
+
+- The image is tagged with the **git commit SHA**, not `latest`, so every running container traces back to an exact commit.
+- API keys are stored as **Container Apps secrets** and injected by reference, never as plain environment variables.
+- **Scales to zero** between visits. Cold start is about 6 seconds; warm requests answer in about 1 second.
+- PostgreSQL checkpoints live on a hosted database in the same region-ish neighbourhood (Singapore), because every node of the graph writes a checkpoint.
 
 ---
 
@@ -517,9 +534,17 @@ The v2 and v3 images keep `uvx` because the AviationStack MCP server is started 
 This is a portfolio project and is **not production-ready**.
 
 - **No ticket prices.** Fares are model estimates, not live quotes.
-- **Flight data depends on your AviationStack plan.** Some endpoints (airport, airline and route listings) require a paid plan. When live data is unavailable, the flight section falls back on the model's general knowledge.
+- **Flight data is limited by the free AviationStack plan — on purpose.** In v1 the flight tool
+  called a single endpoint, `/v1/flights`, which the free plan allows, so v1 returned live flight
+  data. v2 and v3 moved to the AviationStack MCP server and started using the richer tools it
+  offers — airport, airline and route listings. I probed all eleven endpoints with my key: the free
+  plan allows only `flights`, `flightsFuture` and `timetable`, and the rest answer
+  `function_access_restricted`. So in v2 and v3 the flight section falls back on the model's own
+  knowledge. **This is a plan limit, not a code problem — on a paid plan the same code returns live,
+  accurate flight information.** I am leaving it on the free plan for now, since this is a portfolio
+  project and nothing else in the system depends on it.
 - **Dates are handled by the LLM.** There is no date-parsing or availability search. The model interprets phrases like "next week" itself.
-- **Slow requests.** The agents run one after another and each step waits for the previous one. A v3 travel request took roughly two minutes end to end in testing.
+- **Slow requests.** The agents run one after another and each step waits for the previous one. On the deployed v3 a full plan takes about **66 seconds** to the draft and another **5 seconds** after approval; running locally it is slower, around 95 seconds, because every checkpoint write has further to travel.
 - **The v3 guardrail fails open.** If the guardrail's own LLM call or JSON parsing fails, the request is allowed through. It is a first line of defence, not a security boundary.
 - **Approval is a single round.** A rejected draft goes straight to the final agent with your feedback; it is not shown to you again for a second approval.
 - **A reloaded page forgets a pending draft.** The paused run is still saved on the server, but the UI does not yet reattach to it.
